@@ -1,32 +1,34 @@
 const http = require("http");
 const { MongoClient } = require("mongodb");
 
-const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
+const PORT = process.env.PORT || 10000;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-const server = http.createServer(async (req, res) => {
-  if (req.url === "/") {
-    res.writeHead(200, { "Content-Type": "application/json" });
+if (!MONGODB_URI) {
+  console.error("❌ MONGODB_URI not found");
+  process.exit(1);
+}
 
-    try {
-      const client = new MongoClient(MONGO_URI);
-      await client.connect();
-      await client.close();
+const client = new MongoClient(MONGODB_URI);
 
-      res.end(JSON.stringify({
-        server: "Running",
-        mongo: "MongoDB Connected ✅"
-      }));
-    } catch (err) {
-      res.end(JSON.stringify({
-        server: "Running",
-        mongo: "MongoDB Error ❌",
-        error: err.message
-      }));
-    }
+async function startServer() {
+  try {
+    await client.connect();
+    console.log("✅ MongoDB connected");
+
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ message: "Backend is running" }));
+    });
+
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+
+  } catch (error) {
+    console.error("❌ MongoDB connection failed:", error.message);
+    process.exit(1);
   }
-});
+}
 
-server.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
+startServer();
