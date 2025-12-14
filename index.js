@@ -1,71 +1,47 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-/* ==============================
-   MongoDB Connection
-   ============================== */
+// MongoDB Connection
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected ✅"))
+  .catch((err) => console.log("MongoDB Error ❌", err));
 
-const MONGO_URL = process.env.MONGO_URL; 
-// Render / local env variable में डालना होगा
-
-mongoose.connect(MONGO_URL)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.log("❌ Mongo error:", err));
-
-/* ==============================
-   Schema & Model
-   ============================== */
-
+// Schema
 const PostSchema = new mongoose.Schema({
   msg: String,
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  createdAt: { type: Date, default: Date.now }
 });
 
 const Post = mongoose.model("Post", PostSchema);
 
-/* ==============================
-   Routes
-   ============================== */
-
-// health check
+// Test route
 app.get("/", (req, res) => {
-  res.send("Backend running successfully");
+  res.send("Backend running on Render 🚀");
 });
 
-// save message
+// Save data
 app.post("/save", async (req, res) => {
-  try {
-    const { msg } = req.body;
-    if (!msg) {
-      return res.status(400).json({ ok: false, error: "msg required" });
-    }
+  const { msg } = req.body;
+  if (!msg) return res.json({ ok: false });
 
-    const post = await Post.create({ msg });
-    res.json({ ok: true, saved: post });
-
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+  const post = await Post.create({ msg });
+  res.json({ ok: true, saved: post });
 });
 
-// get all messages
+// Get all data
 app.get("/list", async (req, res) => {
-  const data = await Post.find().sort({ createdAt: -1 });
-  res.json(data);
+  const posts = await Post.find().sort({ createdAt: -1 });
+  res.json(posts);
 });
 
-/* ==============================
-   Server
-   ============================== */
-
+// Server start
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
+  console.log("Server started on port", PORT);
 });
