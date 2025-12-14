@@ -1,22 +1,28 @@
 const express = require("express");
+const mongoose = require("mongoose");
+
 const app = express();
 
-app.use(express.json()); // JSON body read karne ke liye
+// middleware
+app.use(express.json());
 
+// test route
 app.get("/", (req, res) => {
-  res.send("Backend working");
+  res.send("Backend + MongoDB Working");
 });
 
-// 👇 MESSAGE TEST API
-app.post("/message", (req, res) => {
-  const { message } = req.body;
-  res.json({
-    success: true,
-    received: message
+// MongoDB connect
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB Connected Successfully");
+  })
+  .catch((err) => {
+    console.log("MongoDB Connection Error:", err);
   });
-});
 
+// server start
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("Server started on", PORT);
+  console.log(`Server running on port ${PORT}`);
 });
