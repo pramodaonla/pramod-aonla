@@ -2,20 +2,17 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 const app = express();
+app.use(express.json());
 
-// 👇 IMPORTANT LINE
-const MONGO_URI = process.env.MONGO_URI;
-
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log("MongoDB connected ✅"))
-  .catch((err) => console.log("MongoDB error ❌", err));
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
 
 app.get("/", (req, res) => {
-  res.send("Backend running");
+  res.send("Backend + Database Working");
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("Server running on", PORT);
 });
