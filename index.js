@@ -4,28 +4,42 @@ const { MongoClient } = require("mongodb");
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGODB_URI;
 
-let dbStatus = "Connecting to MongoDB...";
+let mongoStatus = "Not connected";
 
 async function connectDB() {
   try {
-    const client = new MongoClient(MONGO_URI);
+    if (!MONGO_URI) {
+      mongoStatus = "MONGODB_URI not found";
+      return;
+    }
+
+    const client = new MongoClient(MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
+
     await client.connect();
-    dbStatus = "MongoDB Connected Successfully ✅";
-    console.log(dbStatus);
-  } catch (error) {
-    dbStatus = "MongoDB Connection Failed ❌";
-    console.error(error.message);
+    mongoStatus = "MongoDB Connected ✅";
+    console.log(mongoStatus);
+  } catch (err) {
+    mongoStatus = "MongoDB Error ❌";
+    console.error(err.message);
   }
 }
 
-connectDB();
+// ⚠️ IMPORTANT: build time pe connect nahi
+// connectDB(); ❌ removed
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+  // connect only when request comes
+  if (mongoStatus === "Not connected") {
+    await connectDB();
+  }
+
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify({
       server: "Running",
-      database: dbStatus
+      mongo: mongoStatus,
     })
   );
 });
