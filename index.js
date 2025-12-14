@@ -3,26 +3,19 @@ const mongoose = require("mongoose");
 
 const app = express();
 
-// middleware
-app.use(express.json());
+// 👇 IMPORTANT LINE
+const MONGO_URI = process.env.MONGO_URI;
 
-// test route
+mongoose
+  .connect(MONGO_URI)
+  .then(() => console.log("MongoDB connected ✅"))
+  .catch((err) => console.log("MongoDB error ❌", err));
+
 app.get("/", (req, res) => {
-  res.send("Backend + MongoDB Working");
+  res.send("Backend running");
 });
 
-// MongoDB connect
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB Connected Successfully");
-  })
-  .catch((err) => {
-    console.log("MongoDB Connection Error:", err);
-  });
-
-// server start
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("Server running on port", PORT);
 });
