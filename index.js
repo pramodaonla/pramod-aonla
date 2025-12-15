@@ -1,106 +1,120 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
+
 const User = require("./models/User");
 
 const app = express();
 app.use(express.json());
 
-// MongoDB
+/* ===================== DB ===================== */
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log(err));
+  .catch(err => console.log(err));
 
-// TEST
-app.get("/", (req, res) => {
-  res.send("Backend + Database Working");
+/* ===================== EMAIL ===================== */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-// REGISTER
+/* ===================== TEST ===================== */
+app.get("/", (req, res) => {
+  res.send("Backend working perfectly ✅");
+});
+
+/* ===================== REGISTER ===================== */
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    const exist = await User.findOne({ email });
-    if (exist) return res.status(400).json({ message: "User exists" });
+    if (await User.findOne({ email })) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
 
     const hash = await bcrypt.hash(password, 10);
 
     await User.create({ name, email, password: hash });
 
-    res.json({ message: "Registered successfully" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.json({ message: "User registered successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-// LOGIN
+/* ===================== LOGIN ===================== */
 app.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).json({ message: "User not found" });
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(400).json({ message: "Wrong password" });
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(400).json({ message: "Wrong password" });
 
-    res.json({ message: "Login success" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  res.json({ message: "Login successful" });
 });
 
-// MESSAGE TEST 🔥
+/* ===================== MESSAGE ===================== */
 app.post("/message", (req, res) => {
   res.json({
-    reply: "Message received successfully",
-    data: req.body,
+    success: true,
+    yourMessage: req.body,
   });
 });
 
-// FORGOT PASSWORD
+/* ===================== FORGOT PASSWORD ===================== */
 app.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
 
   const user = await User.findOne({ email });
   if (!user) return res.status(404).json({ message: "User not found" });
 
-  const token = crypto.randomBytes(20).toString("hex");
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-  user.resetPasswordToken = token;
-  user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
-
+  user.resetOTP = otp;
+  user.resetOTPExpire = Date.now() + 10 * 60 * 1000;
   await user.save();
 
-  res.json({
-    message: "Reset token generated",
-    token,
+  await transporter.sendMail({
+    to: email,
+    subject: "Password Reset OTP",
+    html: `<h2>Your OTP is ${otp}</h2><p>Valid for 10 minutes</p>`,
   });
+
+  res.json({ message: "OTP sent to email" });
 });
 
-// RESET PASSWORD
-app.post("/reset-password/:token", async (req, res) => {
-  const { password } = req.body;
-  const { token } = req.params;
+/* ===================== RESET PASSWORD ===================== */
+app.post("/reset-password", async (req, res) => {
+  const { email, otp, newPassword } = req.body;
 
   const user = await User.findOne({
-    resetPasswordToken: token,
-    resetPasswordExpire: { $gt: Date.now() },
+    email,
+    resetOTP: otp,
+    resetOTPExpire: { $gt: Date.now() },
   });
 
-  if (!user) return res.status(400).json({ message: "Token invalid" });
+  if (!user) {
+    return res.status(400).json({ message: "Invalid or expired OTP" });
+  }
 
-  user.password = await bcrypt.hash(password, 10);
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpire = undefined;
-
+  user.password = await bcrypt.hash(newPassword, 10);
+  user.resetOTP = undefined;
+  user.resetOTPExpire = undefined;
   await user.save();
 
   res.json({ message: "Password reset successful" });
 });
 
+/* ===================== SERVER ===================== */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
