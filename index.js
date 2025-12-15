@@ -7,133 +7,121 @@ const User = require("./models/User");
 const app = express();
 app.use(express.json());
 
-// 🔗 MongoDB connection
-mongoose
-  .connect(process.env.MONGO_URI)
+// MongoDB
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log(err));
+  .catch(err => console.log(err));
 
-// 🧪 Test route
+/* ================= TEST ================= */
 app.get("/", (req, res) => {
-  res.send("Backend + Database Working");
+  res.send("Backend Working");
 });
 
-// ✅ REGISTER
+/* ================= REGISTER ================= */
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    const userExist = await User.findOne({ email });
-    if (userExist) {
-      return res.status(400).json({ message: "Email already registered" });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
+    const user = await User.create({
       name,
       email,
       password: hashedPassword,
     });
 
-    await user.save();
-    res.json({ message: "User registered successfully" });
+    res.json({ message: "User registered", user });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
-// ✅ LOGIN
+/* ================= LOGIN ================= */
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
+    if (!user) return res.status(400).json({ message: "User not found" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid password" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Wrong password" });
 
-    res.json({
-      message: "Login successful",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-    });
+    res.json({ message: "Login successful" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ✅ MESSAGE (TEST)
-app.post("/message", (req, res) => {
-  res.json({
-    reply: "Message received",
-    data: req.body,
-  });
-});
-
-// 🔐 FORGOT PASSWORD (NO TWILIO)
+/* ================= FORGOT PASSWORD ================= */
 app.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    const resetToken = crypto.randomBytes(20).toString("hex");
+    const resetToken = crypto.randomBytes(32).toString("hex");
 
-    user.resetPasswordToken = resetToken;
+    user.resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 min
 
     await user.save();
 
+    // 👇 अभी email नहीं भेज रहे, सिर्फ token return कर रहे (TEST)
     res.json({
-      message: "Reset token generated (testing mode)",
+      message: "Reset token generated",
       resetToken,
+      resetUrl: `/reset-password/${resetToken}`,
     });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 🔑 RESET PASSWORD
+/* ================= RESET PASSWORD ================= */
 app.post("/reset-password/:token", async (req, res) => {
   try {
-    const { password } = req.body;
-    const { token } = req.params;
+    const resetTokenHashed = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
 
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: resetTokenHashed,
       resetPasswordExpire: { $gt: Date.now() },
     });
 
-    if (!user) {
+    if (!user)
       return res.status(400).json({ message: "Invalid or expired token" });
-    }
 
-    user.password = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    user.password = hashedPassword;
+
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 
     await user.save();
 
     res.json({ message: "Password reset successful" });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 🚀 SERVER
+/* ================= MESSAGE ================= */
+app.post("/message", (req, res) => {
+  res.json({ message: "Message API working" });
+});
+
+/* ================= SERVER ================= */
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+  console.log("Server running on", PORT);
 });
