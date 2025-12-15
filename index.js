@@ -1,91 +1,101 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs"); // 🔐 password encryption
-const User = require("./models/User");
+const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const app = express();
+
+/* ================= MIDDLEWARE ================= */
 app.use(express.json());
 
-// 🔗 MongoDB connection
+/* ================= DB ================= */
 mongoose
-.connect(process.env.MONGO_URI)
-.then(() => console.log("MongoDB Connected"))
-.catch((err) => console.log(err));
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.log(err));
 
-// 🧪 Test route
+/* ================= USER MODEL ================= */
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  password: String,
+  resetPasswordToken: String,
+  resetPasswordExpire: Date,
+});
+
+const User = mongoose.model("User", userSchema);
+
+/* ================= TEST ROUTE ================= */
 app.get("/", (req, res) => {
-res.send("Backend + Database Working");
+  res.send("Backend is running");
 });
 
-// ✅ REGISTER API
+/* ================= REGISTER ================= */
 app.post("/register", async (req, res) => {
-try {
-const { name, email, password } = req.body;
+  const { name, email, password } = req.body;
 
-const existingUser = await User.findOne({ email });  
-if (existingUser) {  
-  return res.status(400).json({ message: "Email already registered" });  
-}  ing 
-const hashedPassword = await bcrypt.hash(password, 10);  
+  const hashed = await bcrypt.hash(password, 10);
+  await User.create({ name, email, password: hashed });
 
-const user = new User({  
-  name,  
-  email,  
-  password: hashedPassword,  
-});  
-
-await user.save();  
-
-res.json({  
-  message: "User registered successfully",  
+  res.json({ message: "Register success" });
 });
 
-} catch (error) {
-res.status(500).json({ error: error.message });
-}
-});
-
-// ✅ LOGIN API (tumhara diya hua code)
+/* ================= LOGIN ================= */
 app.post("/login", async (req, res) => {
-try {
-const { email, password } = req.body;
+  const { email, password } = req.body;
 
-const user = await User.findOne({ email });  
-if (!user) {  
-  return res.status(400).json({ message: "User not found" });  
-}  
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).json({ message: "User not found" });
 
-const isMatch = await bcrypt.compare(password, user.password);  
-if (!isMatch) {  
-  return res.status(400).json({ message: "Invalid password" });  
-}  
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(400).json({ message: "Wrong password" });
 
-res.json({  
-  message: "Login successful",  
-  user: {  
-    id: user._id,  
-    name: user.name,  
-    email: user.email,  
-  },  
+  res.json({ message: "Login success" });
 });
 
-} catch (error) {
-res.status(500).json({ error: error.message });
-}
-});
-
-// ✅ MESSAGE TEST API
+/* ================= MESSAGE ================= */
 app.post("/message", (req, res) => {
-const { message } = req.body;
-
-res.json({
-reply: "Message received",
-yourMessage: message,
-});
+  res.json({ message: "Message API working" });
 });
 
-// 🚀 Server start
+/* ================= FORGOT PASSWORD ================= */
+app.post("/forgot-password", async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).json({ message: "User not found" });
+
+  const token = crypto.randomBytes(20).toString("hex");
+
+  user.resetPasswordToken = token;
+  user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+  await user.save();
+
+  res.json({
+    message: "Reset token generated",
+    token: token, // EMAIL बाद में जोड़ेंगे
+  });
+});
+
+/* ================= RESET PASSWORD ================= */
+app.post("/reset-password/:token", async (req, res) => {
+  const { password } = req.body;
+
+  const user = await User.findOne({
+    resetPasswordToken: req.params.token,
+    resetPasswordExpire: { $gt: Date.now() },
+  });
+
+  if (!user) return res.status(400).json({ message: "Invalid token" });
+
+  user.password = await bcrypt.hash(password, 10);
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+  await user.save();
+
+  res.json({ message: "Password reset success" });
+});
+
+/* ================= SERVER ================= */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-console.log("Server running on port", PORT);
-});
+app.listen(PORT, () => console.log("Server running on port " + PORT));
