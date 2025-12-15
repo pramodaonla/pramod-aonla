@@ -1,127 +1,120 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
+const twilio = require("twilio");
 const User = require("./models/User");
 
 const app = express();
 app.use(express.json());
 
-// MongoDB
-mongoose.connect(process.env.MONGO_URI)
+// 🔗 MongoDB
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log(err));
+  .catch((err) => console.log(err));
 
-/* ================= TEST ================= */
+// 🔐 Twilio
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// 🧪 Test
 app.get("/", (req, res) => {
-  res.send("Backend Working");
+  res.send("Backend Running");
 });
 
-/* ================= REGISTER ================= */
+// 🟢 Register
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const exist = await User.findOne({ email });
+    if (exist)
+      return res.status(400).json({ message: "Email already exists" });
 
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-    });
+    const hash = await bcrypt.hash(password, 10);
 
-    res.json({ message: "User registered", user });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    await User.create({ name, email, password: hash });
+
+    res.json({ message: "Registered successfully" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-/* ================= LOGIN ================= */
+// 🟢 Login
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found" });
+    if (!user)
+      return res.status(400).json({ message: "User not found" });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Wrong password" });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match)
+      return res.status(400).json({ message: "Wrong password" });
 
-    res.json({ message: "Login successful" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({ message: "Login success" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-/* ================= FORGOT PASSWORD ================= */
+// 🟡 Forgot Password → Send OTP
 app.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
 
-    const resetToken = crypto.randomBytes(32).toString("hex");
+    await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verifications.create({
+        to: email,
+        channel: "email",
+      });
 
-    user.resetPasswordToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
-
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 min
-
-    await user.save();
-
-    // 👇 अभी email नहीं भेज रहे, सिर्फ token return कर रहे (TEST)
-    res.json({
-      message: "Reset token generated",
-      resetToken,
-      resetUrl: `/reset-password/${resetToken}`,
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({ message: "OTP sent to email" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-/* ================= RESET PASSWORD ================= */
-app.post("/reset-password/:token", async (req, res) => {
+// 🔴 Reset Password → Verify OTP
+app.post("/reset-password", async (req, res) => {
   try {
-    const resetTokenHashed = crypto
-      .createHash("sha256")
-      .update(req.params.token)
-      .digest("hex");
+    const { email, otp, newPassword } = req.body;
 
-    const user = await User.findOne({
-      resetPasswordToken: resetTokenHashed,
-      resetPasswordExpire: { $gt: Date.now() },
-    });
+    const check = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verificationChecks.create({
+        to: email,
+        code: otp,
+      });
 
-    if (!user)
-      return res.status(400).json({ message: "Invalid or expired token" });
+    if (check.status !== "approved") {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
 
-    const hashedPassword = await bcrypt.hash(req.body.password, 10);
-    user.password = hashedPassword;
+    const hash = await bcrypt.hash(newPassword, 10);
 
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-
-    await user.save();
+    await User.findOneAndUpdate(
+      { email },
+      { password: hash }
+    );
 
     res.json({ message: "Password reset successful" });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-/* ================= MESSAGE ================= */
-app.post("/message", (req, res) => {
-  res.json({ message: "Message API working" });
-});
-
-/* ================= SERVER ================= */
+// 🚀 Server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("Server running on", PORT);
+  console.log("Server running on port", PORT);
 });
