@@ -2,26 +2,30 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
 const User = require("./models/User");
 
 const app = express();
 app.use(express.json());
 
-// ================== MongoDB ==================
+// MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log(err));
 
-// ================== REGISTER ==================
+// TEST
+app.get("/", (req, res) => {
+  res.send("Backend + Database Working");
+});
+
+// REGISTER
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
     const exist = await User.findOne({ email });
     if (exist) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({ message: "Email already registered" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
@@ -38,18 +42,20 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// ================== LOGIN ==================
+// LOGIN
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(400).json({ message: "User not found" });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match)
+    if (!match) {
       return res.status(400).json({ message: "Invalid password" });
+    }
 
     res.json({
       message: "Login successful",
@@ -64,65 +70,54 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ================== MESSAGE ==================
+// MESSAGE
 app.post("/message", (req, res) => {
-  res.json({ reply: "Message received successfully" });
+  const { message } = req.body;
+  res.json({ reply: "Message received", yourMessage: message });
 });
 
-// ================== EMAIL SETUP ==================
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-// ================== FORGOT PASSWORD ==================
+// FORGOT PASSWORD (TOKEN GENERATE)
 app.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
 
-    // OTP generate
-    const otp = crypto.randomInt(100000, 999999).toString();
+    const token = crypto.randomBytes(20).toString("hex");
 
-    user.resetPasswordToken = otp;
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 min
+    user.resetPasswordToken = token;
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 min
+
     await user.save();
 
-    // Send email
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: "Password Reset OTP",
-      text: `Your OTP is ${otp}. It is valid for 10 minutes.`,
+    res.json({
+      message: "Reset token generated",
+      token, // ⚠️ email नहीं, direct token
     });
-
-    res.json({ message: "OTP sent to email" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================== RESET PASSWORD ==================
-app.post("/reset-password", async (req, res) => {
+// RESET PASSWORD
+app.post("/reset-password/:token", async (req, res) => {
   try {
-    const { otp, newPassword } = req.body;
+    const { password } = req.body;
+    const { token } = req.params;
 
     const user = await User.findOne({
-      resetPasswordToken: otp,
+      resetPasswordToken: token,
       resetPasswordExpire: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = await bcrypt.hash(password, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 
@@ -134,7 +129,7 @@ app.post("/reset-password", async (req, res) => {
   }
 });
 
-// ================== SERVER ==================
+// SERVER
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
