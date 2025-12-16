@@ -1,53 +1,21 @@
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
-const User = require("./models/User");
+const cors = require("cors");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log(err));
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"));
 
-// Test route
+app.use("/api/auth", require("./routes/auth"));
+
 app.get("/", (req, res) => {
-  res.send("Backend + Database Working");
+  res.send("Backend Running");
 });
 
-// ✅ REGISTER ROUTE
-app.post("/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-
-    const user = new User({
-      name,
-      email,
-      password,
-    });
-
-    await user.save();
-
-    res.json({
-      message: "User registered successfully",
-      user,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ✅ MESSAGE TEST ROUTE
-app.post("/message", (req, res) => {
-  const { message } = req.body;
-  res.json({
-    reply: "Message received",
-    yourMessage: message,
-  });
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
+app.listen(process.env.PORT, () =>
+  console.log("Server running")
+);
