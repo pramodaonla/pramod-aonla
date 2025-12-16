@@ -7,7 +7,7 @@ const sendOtp = require("../utils/sendOtp");
 const router = express.Router();
 
 /* REGISTER */
-router.post("/register", async (req, res) => {
+router.post("/register", (req, res) => {
   const { email, password } = req.body;
 
   const hashed = await bcrypt.hash(password, 10);
@@ -21,7 +21,7 @@ router.post("/register", async (req, res) => {
   });
 
   await sendOtp(email, otp);
-  res.json({ message: "OTP sent" });
+  res.json({ message: "register route working" });
 });
 
 /* VERIFY OTP */
