@@ -1,119 +1,96 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-const twilio = require("twilio");
+const bcrypt = require("bcryptjs");   // ✅ bcrypt import
 const User = require("./models/User");
 
 const app = express();
 app.use(express.json());
 
-// 🔗 MongoDB
+// 🔗 MongoDB connection
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log(err));
 
-// 🔐 Twilio
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
-// 🧪 Test
+// 🧪 Test route
 app.get("/", (req, res) => {
-  res.send("Backend Running");
+  res.send("Backend + Database Working");
 });
 
-// 🟢 Register
+// ✅ REGISTER ROUTE (password encrypted)
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    const exist = await User.findOne({ email });
-    if (exist)
-      return res.status(400).json({ message: "Email already exists" });
+    // email already exists check
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        message: "Email already registered",
+      });
+    }
 
-    const hash = await bcrypt.hash(password, 10);
+    // 🔐 password encrypt
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    await User.create({ name, email, password: hash });
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+    });
 
-    res.json({ message: "Registered successfully" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    await user.save();
+
+    res.json({
+      message: "User registered successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// 🟢 Login
+// ✅ LOGIN ROUTE
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user)
-      return res.status(400).json({ message: "User not found" });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match)
-      return res.status(400).json({ message: "Wrong password" });
-
-    res.json({ message: "Login success" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// 🟡 Forgot Password → Send OTP
-app.post("/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ message: "User not found" });
-
-    await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications.create({
-        to: email,
-        channel: "email",
+    if (!user) {
+      return res.status(400).json({
+        message: "User not found",
       });
-
-    res.json({ message: "OTP sent to email" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// 🔴 Reset Password → Verify OTP
-app.post("/reset-password", async (req, res) => {
-  try {
-    const { email, otp, newPassword } = req.body;
-
-    const check = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks.create({
-        to: email,
-        code: otp,
-      });
-
-    if (check.status !== "approved") {
-      return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    const hash = await bcrypt.hash(newPassword, 10);
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Invalid password",
+      });
+    }
 
-    await User.findOneAndUpdate(
-      { email },
-      { password: hash }
-    );
-
-    res.json({ message: "Password reset successful" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.json({
+      message: "Login successful",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// 🚀 Server
+// ✅ MESSAGE TEST ROUTE
+app.post("/message", (req, res) => {
+  const { message } = req.body;
+  res.json({
+    reply: "Message received",
+    yourMessage: message,
+  });
+});
+
+// 🚀 Server start
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
