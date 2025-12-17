@@ -1,47 +1,40 @@
 const express = require("express");
 const router = express.Router();
 const Post = require("../models/Post");
-const User = require("../models/User");
 
-/*
-POST /api/posts
-Create new post
-*/
-router.post("/", async (req, res) => {
+// ✅ SAVE POST
+router.post("/save", async (req, res) => {
   try {
-    const { email, content, media } = req.body;
+    const { email, kind, is_video, media } = req.body;
 
-    if (!email)
-      return res.status(400).json({ error: "Email required" });
-
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ error: "User not found" });
+    if (!email || !media) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
 
     const post = await Post.create({
-      user: user._id,
       email,
-      content: content || "",
-      media: media || ""
+      kind,
+      is_video,
+      media
     });
 
-    res.json({ message: "Post created", post });
+    res.json({ success: true, post });
   } catch (err) {
-    console.error(err);
+    console.error("save post error", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-/*
-GET /api/posts
-Get all posts
-*/
-router.get("/", async (req, res) => {
+// ✅ GET FEED
+router.post("/feed", async (req, res) => {
   try {
-    const posts = await Post.find().sort({ createdAt: -1 });
+    const posts = await Post.find()
+      .sort({ created_at: -1 })
+      .limit(50);
+
     res.json({ posts });
   } catch (err) {
-    console.error(err);
+    console.error("feed error", err);
     res.status(500).json({ error: "Server error" });
   }
 });
