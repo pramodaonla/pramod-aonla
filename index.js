@@ -9,8 +9,8 @@ app.use(cors());
 app.use(express.json());
 
 // ✅ Mongo connect
-mongoose.connect(process.env.MONGO_URI, {DBname: "pramodaonla"})
-  .then(() => console.log("MongoDB connected"))
+mongoose.connect(process.env.MONGO_URI, {dbName: "pramodaonla"})
+  .then(() => console.log("MongoDB connected to pramodaonla"))
   .catch(err => console.error("Mongo error", err));
 
 // ✅ AUTH ROUTES (THIS IS THE KEY)
