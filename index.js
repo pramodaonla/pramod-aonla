@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 // ✅ Mongo connect
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {dbName: "pramodaonla"})
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("Mongo error", err));
 
