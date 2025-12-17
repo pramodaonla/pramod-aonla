@@ -1,21 +1,28 @@
 const express = require("express");
-const Post = require("../models/Post");
-const auth = require("../middleware/auth");
-
 const router = express.Router();
+const Post = require("../models/Post");
+const User = require("../models/User");
 
-/* CREATE POST */
-router.post("/", auth, async (req, res) => {
+/*
+POST /api/posts
+Create new post
+*/
+router.post("/", async (req, res) => {
   try {
-    const { media, kind } = req.body;
-    if (!media) {
-      return res.status(400).json({ error: "Media required" });
-    }
+    const { email, content, media } = req.body;
+
+    if (!email)
+      return res.status(400).json({ error: "Email required" });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ error: "User not found" });
 
     const post = await Post.create({
-      owner: req.user._id,
-      media,
-      kind: kind || "photo"
+      user: user._id,
+      email,
+      content: content || "",
+      media: media || ""
     });
 
     res.json({ message: "Post created", post });
@@ -25,16 +32,16 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-/* GET FEED */
-router.get("/", auth, async (req, res) => {
+/*
+GET /api/posts
+Get all posts
+*/
+router.get("/", async (req, res) => {
   try {
-    const posts = await Post.find()
-      .populate("owner", "email")
-      .sort({ createdAt: -1 })
-      .limit(50);
-
+    const posts = await Post.find().sort({ createdAt: -1 });
     res.json({ posts });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
