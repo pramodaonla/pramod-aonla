@@ -1,8 +1,9 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 const User = require("../models/User");
+const sendMail = require("../utils/sendMail");
 
 const router = express.Router();
 
@@ -11,145 +12,110 @@ router.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password)
-      return res.status(400).json({ error: "Email and password required" });
-
-    const exist = await User.findOne({ email });
-    if (exist)
-      return res.status(400).json({ error: "User already exists" });
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(400).json({ error: "Email already registered" });
 
     const hash = await bcrypt.hash(password, 10);
 
-    await User.create({
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+
+    const user = await User.create({
       email,
       password: hash,
-      verified: true
+      verifyToken,
+      verifyTokenExpiry: Date.now() + 24 * 60 * 60 * 1000
     });
 
-    res.json({ success: true, message: "User registered successfully" });
+    const link = `${process.env.BACKEND_URL}/api/auth/verify/${verifyToken}`;
 
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    await sendMail(
+      email,
+      "Verify your account",
+      `<h3>Verify Account</h3><a href="${link}">Click here</a>`
+    );
+
+    res.json({ success: true, message: "Verification email sent" });
+
+  } catch (e) {
+    res.status(500).json({ error: "Register failed" });
   }
+});
+
+/* ================= VERIFY ================= */
+router.get("/verify/:token", async (req, res) => {
+  const user = await User.findOne({
+    verifyToken: req.params.token,
+    verifyTokenExpiry: { $gt: Date.now() }
+  });
+
+  if (!user) return res.status(400).send("Invalid or expired link");
+
+  user.verified = true;
+  user.verifyToken = undefined;
+  user.verifyTokenExpiry = undefined;
+  await user.save();
+
+  res.send("Email verified successfully");
 });
 
 /* ================= LOGIN ================= */
 router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ error: "User not found" });
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).json({ error: "User not found" });
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok)
-      return res.status(401).json({ error: "Invalid password" });
-
-    const token = jwt.sign(
-      { email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({
-      success: true,
-      token,
-      email: user.email
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
+  if (!user.verified) {
+    return res.status(401).json({ error: "Please verify email first" });
   }
+
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) return res.status(401).json({ error: "Invalid password" });
+
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    expiresIn: "7d"
+  });
+
+  res.json({ success: true, token });
 });
 
-/* ================= FORGOT PASSWORD ================= */
+/* ================= FORGOT ================= */
 router.post("/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
+  const user = await User.findOne({ email: req.body.email });
+  if (!user) return res.json({ success: true });
 
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ error: "User not found" });
+  const token = crypto.randomBytes(32).toString("hex");
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  user.resetToken = token;
+  user.resetTokenExpiry = Date.now() + 15 * 60 * 1000;
+  await user.save();
 
-    user.resetOtp = otp;
-    user.resetOtpExpiry = Date.now() + 10 * 60 * 1000;
-    user.isResetVerified = false;
-    await user.save();
+  const link = `${process.env.BACKEND_URL}/reset-password/${token}`;
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
+  await sendMail(
+    user.email,
+    "Reset Password",
+    `<a href="${link}">Reset Password</a>`
+  );
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Password Reset OTP",
-      text: `Your OTP is ${otp}. Valid for 10 minutes.`
-    });
-
-    res.json({ success: true, message: "OTP sent to email" });
-
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
+  res.json({ success: true });
 });
 
-/* ================= VERIFY RESET OTP ================= */
-router.post("/verify-reset-otp", async (req, res) => {
-  try {
-    const { email, otp } = req.body;
+/* ================= RESET ================= */
+router.post("/reset-password/:token", async (req, res) => {
+  const user = await User.findOne({
+    resetToken: req.params.token,
+    resetTokenExpiry: { $gt: Date.now() }
+  });
 
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(404).json({ error: "User not found" });
+  if (!user) return res.status(400).json({ error: "Invalid link" });
 
-    if (
-      user.resetOtp !== otp ||
-      !user.resetOtpExpiry ||
-      user.resetOtpExpiry < Date.now()
-    ) {
-      return res.status(400).json({ error: "Invalid or expired OTP" });
-    }
+  user.password = await bcrypt.hash(req.body.password, 10);
+  user.resetToken = undefined;
+  user.resetTokenExpiry = undefined;
+  await user.save();
 
-    user.isResetVerified = true;
-    user.resetOtp = null;
-    user.resetOtpExpiry = null;
-    await user.save();
-
-    res.json({ success: true, message: "OTP verified" });
-
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ================= RESET PASSWORD ================= */
-router.post("/reset-password", async (req, res) => {
-  try {
-    const { email, newPassword } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user || !user.isResetVerified)
-      return res.status(400).json({ error: "Not allowed" });
-
-    const hash = await bcrypt.hash(newPassword, 10);
-
-    user.password = hash;
-    user.isResetVerified = false;
-    await user.save();
-
-    res.json({ success: true, message: "Password reset successful" });
-
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
+  res.json({ success: true });
 });
 
 module.exports = router;
