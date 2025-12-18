@@ -138,13 +138,13 @@ router.post("/forgot-password", async (req, res) => {
     const resetToken = crypto.randomBytes(32).toString("hex");
 
     user.resetToken = resetToken;
-    user.resetTokenExpire = Date.now() + 15 * 60 * 1000;
+    user.resetTokenExpire = Date.now() + 15 * 60 * 1000; //15 min
     await user.save();
 
     const link = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
     await sendMail(
-      email,
+     user.email,
       "Reset password",
       `Reset your password using this link:\n${link}`
     );
@@ -154,7 +154,7 @@ router.post("/forgot-password", async (req, res) => {
       message: "Password reset email sent"
     });
   } catch (err) {
-    console.error(err);
+    console.error ("FORGOT PASSWORD:",(err);
     res.status(500).json({ error: "Server error" });
   }
 });
