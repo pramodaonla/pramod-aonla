@@ -1,7 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
 import User from "../models/User.js";
 import transporter from "../config/mail.js";
 
@@ -9,57 +8,59 @@ const router = express.Router();
 
 /* REGISTER */
 router.post("/register", async (req, res) => {
-  const { username, email, password } = req.body;
+  const { email, password } = req.body;
+
   const hash = await bcrypt.hash(password, 10);
-  await User.create({ username, email, password: hash });
+  await User.create({ email, password: hash });
+
   res.json({ message: "Registered" });
 });
 
 /* LOGIN */
 router.post("/login", async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
+  const { email, password } = req.body;
+
+  const user = await User.findOne({ email });
   if (!user) return res.status(400).json({ message: "User not found" });
 
-  const ok = await bcrypt.compare(req.body.password, user.password);
-  if (!ok) return res.status(400).json({ message: "Wrong password" });
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(400).json({ message: "Wrong password" });
 
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
   res.json({ token });
 });
 
-/* FORGOT PASSWORD */
-router.post("/forgot-password", async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
-  if (!user) return res.status(400).json({ message: "Email not found" });
+/* SEND OTP */
+router.post("/forgot", async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).json({ message: "User not found" });
 
   const otp = Math.floor(100000 + Math.random() * 900000);
-  user.resetOtp = otp;
-  user.otpExpire = Date.now() + 5 * 60 * 1000;
+  user.otp = otp;
+  user.otpExpire = Date.now() + 10 * 60 * 1000;
   await user.save();
 
   await transporter.sendMail({
-    to: user.email,
-    subject: "Password Reset OTP",
-    html: `<h2>Your OTP is ${otp}</h2>`
+    to: email,
+    subject: "Your OTP",
+    text: `Your OTP is ${otp}`
   });
 
   res.json({ message: "OTP sent" });
 });
 
-/* VERIFY OTP */
-router.post("/verify-otp", async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
-  if (!user || user.resetOtp != req.body.otp)
-    return res.status(400).json({ message: "Invalid OTP" });
-
-  res.json({ message: "OTP verified" });
-});
-
 /* RESET PASSWORD */
-router.post("/reset-password", async (req, res) => {
-  const user = await User.findOne({ email: req.body.email });
-  user.password = await bcrypt.hash(req.body.newPassword, 10);
-  user.resetOtp = null;
+router.post("/reset", async (req, res) => {
+  const { email, otp, password } = req.body;
+  const user = await User.findOne({ email });
+
+  if (!user || user.otp != otp || user.otpExpire < Date.now()) {
+    return res.status(400).json({ message: "Invalid OTP" });
+  }
+
+  user.password = await bcrypt.hash(password, 10);
+  user.otp = null;
   user.otpExpire = null;
   await user.save();
 
