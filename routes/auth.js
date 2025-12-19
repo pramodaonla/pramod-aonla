@@ -85,6 +85,30 @@ router.post("/login", async (req, res) => {
   });
 });
 
+/* ================= AUTH ME (🔥 REQUIRED) ================= */
+router.get("/me", async (req, res) => {
+  try {
+    const auth = req.headers.authorization;
+
+    if (!auth || !auth.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    const token = auth.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    res.json({ user });
+
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
 /* ================= FORGOT PASSWORD ================= */
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
@@ -107,7 +131,7 @@ router.post("/forgot-password", async (req, res) => {
   });
 });
 
-/* ================= RESET PASSWORD (FIXED) ================= */
+/* ================= RESET PASSWORD ================= */
 router.post("/reset/:token", async (req, res) => {
   const { password } = req.body;
 
@@ -118,8 +142,6 @@ router.post("/reset/:token", async (req, res) => {
 
   user.password = await bcrypt.hash(password, 10);
   user.resetToken = null;
-
-  // 🔥 FAST VERIFY FIX
   user.isVerified = true;
 
   await user.save();
