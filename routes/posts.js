@@ -4,35 +4,64 @@ const auth = require("../middleware/auth");
 
 const router = express.Router();
 
-/* SAVE POST */
-router.post("/save", auth, async (req, res) => {
-  try {
-    const { kind, is_video, media, created_at } = req.body;
+/* ================= CREATE POST ================= */
+router.post("/create", auth, async (req, res) => {
+  const { kind, dataUrl, isVideo } = req.body;
 
-    const post = await Post.create({
-      email: req.user.email,
-      kind,
-      is_video,
-      media,
-      created_at
-    });
-
-    res.json({ success: true, post });
-  } catch (err) {
-    res.status(500).json({ error: "Post save failed" });
+  if (!dataUrl || !kind) {
+    return res.status(400).json({ error: "Invalid post" });
   }
+
+  const post = await Post.create({
+    user: req.user._id,
+    kind,
+    dataUrl,
+    isVideo: !!isVideo
+  });
+
+  res.json({ success: true, post });
 });
 
-/* FEED */
-router.post("/feed", auth, async (req, res) => {
-  try {
-    const posts = await Post.find({ email: req.user.email })
-      .sort({ created_at: -1 });
+/* ================= LIST FEED ================= */
+router.get("/list", auth, async (req, res) => {
+  const posts = await Post.find()
+    .populate("user", "email")
+    .sort({ createdAt: -1 })
+    .limit(50);
 
-    res.json({ success: true, posts });
-  } catch (err) {
-    res.status(500).json({ error: "Feed load failed" });
+  res.json({ posts });
+});
+
+/* ================= LIKE / UNLIKE ================= */
+router.post("/like/:id", auth, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ error: "Post not found" });
+
+  const uid = req.user._id.toString();
+
+  if (post.likedBy.includes(uid)) {
+    post.likedBy.pull(uid);
+    post.likes--;
+  } else {
+    post.likedBy.push(uid);
+    post.likes++;
   }
+
+  await post.save();
+  res.json({ success: true, likes: post.likes });
+});
+
+/* ================= DELETE POST ================= */
+router.delete("/delete/:id", auth, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ error: "Not found" });
+
+  if (post.user.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ error: "Not allowed" });
+  }
+
+  await post.deleteOne();
+  res.json({ success: true });
 });
 
 module.exports = router;
