@@ -1,14 +1,37 @@
 const mongoose = require("mongoose");
 
-const postSchema = new mongoose.Schema(
-  {
-    email: { type: String, required: true },
-    kind: { type: String, enum: ["photo", "story"], default: "photo" },
-    is_video: { type: Boolean, default: false },
-    media: { type: String, required: true },
-    created_at: { type: Date, default: Date.now }
+const postSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
   },
-  { timestamps: true }
-);
+
+  kind: {
+    type: String,
+    enum: ["story", "photo"],
+    required: true
+  },
+
+  dataUrl: {
+    type: String,
+    required: true
+  },
+
+  isVideo: {
+    type: Boolean,
+    default: false
+  },
+
+  likes: {
+    type: Number,
+    default: 0
+  },
+
+  likedBy: [{
+    type: mongoose.Schema.Types.ObjectId
+  }]
+
+}, { timestamps: true });
 
 module.exports = mongoose.model("Post", postSchema);
