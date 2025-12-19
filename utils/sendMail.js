@@ -1,20 +1,20 @@
 const nodemailer = require("nodemailer");
 
-const sendMail = async ({ to, subject, html }) => {
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
 
+module.exports = async (to, subject, text) => {
   await transporter.sendMail({
-    from: `"Pramod App" <${process.env.EMAIL_USER}>`,
+    from: process.env.MAIL_FROM,
     to,
     subject,
-    html
+    text
   });
 };
-
-module.exports = sendMail;
