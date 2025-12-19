@@ -7,66 +7,92 @@ const sendMail = require("../utils/sendMail");
 
 const router = express.Router();
 
-/* REGISTER */
+/* ================= REGISTER ================= */
 router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const exists = await User.findOne({ email });
-  if (exists) return res.status(400).json({ error: "User exists" });
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(400).json({ error: "User exists" });
+    }
 
-  const hash = await bcrypt.hash(password, 10);
-  const verifyToken = crypto.randomBytes(32).toString("hex");
+    const hash = await bcrypt.hash(password, 10);
+    const verifyToken = crypto.randomBytes(32).toString("hex");
 
-  await User.create({
-    email,
-    password: hash,
-    verifyToken
-  });
+    await User.create({
+      email,
+      password: hash,
+      verifyToken
+    });
 
-  const link = `${process.env.BASE_URL}/api/auth/verify/${verifyToken}`;
+    const link = `${process.env.BASE_URL}/api/auth/verify/${verifyToken}`;
+    await sendMail(email, "Verify Email", link);
 
-  await sendMail(email, "Verify Email", link);
-
-  res.json({ success: true, message: "Verification email sent" });
+    res.json({
+      success: true,
+      message: "Verification email sent"
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Register failed" });
+  }
 });
 
-/* VERIFY EMAIL */
+/* ================= VERIFY EMAIL ================= */
 router.get("/verify/:token", async (req, res) => {
   const user = await User.findOne({ verifyToken: req.params.token });
-  if (!user) return res.status(400).json({ error: "Invalid token" });
+  if (!user) {
+    return res.status(400).json({ error: "Invalid token" });
+  }
 
   user.isVerified = true;
   user.verifyToken = null;
   await user.save();
 
-  res.json({ success: true, message: "Email verified" });
+  res.json({
+    success: true,
+    message: "Email verified successfully"
+  });
 });
 
-/* LOGIN */
+/* ================= LOGIN ================= */
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({ email });
-  if (!user) return res.status(404).json({ error: "User not found" });
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
 
   if (!user.isVerified) {
     return res.status(401).json({ error: "Verify email first" });
   }
 
   const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.status(401).json({ error: "Wrong password" });
+  if (!ok) {
+    return res.status(401).json({ error: "Wrong password" });
+  }
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+  const token = jwt.sign(
+    { id: user._id },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 
-  res.json({ success: true, token });
+  res.json({
+    success: true,
+    token
+  });
 });
 
-/* FORGOT PASSWORD */
+/* ================= FORGOT PASSWORD ================= */
 router.post("/forgot-password", async (req, res) => {
   const { email } = req.body;
 
   const user = await User.findOne({ email });
-  if (!user) return res.status(404).json({ error: "User not found" });
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
 
   const resetToken = crypto.randomBytes(32).toString("hex");
   user.resetToken = resetToken;
@@ -75,21 +101,33 @@ router.post("/forgot-password", async (req, res) => {
   const link = `${process.env.BASE_URL}/api/auth/reset/${resetToken}`;
   await sendMail(email, "Reset Password", link);
 
-  res.json({ success: true });
+  res.json({
+    success: true,
+    message: "Reset link sent to email"
+  });
 });
 
-/* RESET PASSWORD */
+/* ================= RESET PASSWORD (FIXED) ================= */
 router.post("/reset/:token", async (req, res) => {
   const { password } = req.body;
 
   const user = await User.findOne({ resetToken: req.params.token });
-  if (!user) return res.status(400).json({ error: "Invalid token" });
+  if (!user) {
+    return res.status(400).json({ error: "Invalid token" });
+  }
 
   user.password = await bcrypt.hash(password, 10);
   user.resetToken = null;
+
+  // 🔥 FAST VERIFY FIX
+  user.isVerified = true;
+
   await user.save();
 
-  res.json({ success: true, message: "Password reset" });
+  res.json({
+    success: true,
+    message: "Password reset & email verified"
+  });
 });
 
 module.exports = router;
