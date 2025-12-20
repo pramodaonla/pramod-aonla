@@ -1,12 +1,12 @@
 import Otp from "../models/Otp.js";
 import User from "../models/User.js";
-import bcrypt from "bcryptjs";
+import nodemailer from "nodemailer";
 
-export const verifyOtp = async (req, res) => {
+export const register = async (req, res) => {
   try {
-    const { name, email, password, otp } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!name || !email || !password || !otp) {
+    if (!name || !email || !password) {
       return res.status(400).json({
         message: "All fields are required"
       });
@@ -22,50 +22,42 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find OTP record
-    const record = await Otp.findOne({ email: emailLower, otp });
+    // 2️⃣ Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    if (!record) {
-      return res.status(400).json({
-        message: "Invalid OTP"
-      });
-    }
-
-    // 3️⃣ OTP expiry check
-    if (record.expiresAt < Date.now()) {
-      await Otp.deleteMany({ email: emailLower });
-      return res.status(400).json({
-        message: "OTP expired"
-      });
-    }
-
-    // 4️⃣ Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 5️⃣ Create user AFTER OTP verification
-    await User.create({
-      name,
-      email: emailLower,
-      password: hashedPassword,
-      verified: true
-    });
-
-    // 6️⃣ Delete OTP after success
+    // 3️⃣ Remove old OTPs
     await Otp.deleteMany({ email: emailLower });
 
-    return res.status(201).json({
-      message: "Account verified successfully"
+    // 4️⃣ Save OTP
+    await Otp.create({
+      email: emailLower,
+      otp,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min
+    });
+
+    // 5️⃣ Send Email
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    await transporter.sendMail({
+      from: process.env.MAIL_FROM,
+      to: emailLower,
+      subject: "Your OTP Code",
+      html: `<h2>Your OTP is: ${otp}</h2>`
+    });
+
+    return res.json({
+      message: "OTP sent to email"
     });
 
   } catch (err) {
-
-    // 🔥 Duplicate email safeguard
-    if (err.code === 11000) {
-      return res.status(400).json({
-        message: "User already exists"
-      });
-    }
-
     console.error(err);
     return res.status(500).json({
       message: "Server error"
