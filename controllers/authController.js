@@ -53,13 +53,13 @@ export const register = async (req, res) => {
       html: `<h2>Your OTP is: ${otp}</h2>`
     });
 
-    return res.json({
+    res.json({
       message: "OTP sent to email"
     });
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({
+    res.status(500).json({
       message: "Server error"
     });
   }
