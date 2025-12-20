@@ -17,7 +17,7 @@ app.use("/api/auth", authRoutes);   // ✅ app ke baad hi use
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log(err));
+  .catch((err) => console.error(err));
 
 app.get("/", (req, res) => {
   res.send("Backend Running");
