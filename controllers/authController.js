@@ -1,66 +1,80 @@
-import Otp from "../models/Otp.js";
 import User from "../models/User.js";
-import nodemailer from "nodemailer";
+import Otp from "../models/Otp.js";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
+/* ================= REGISTER ================= */
 export const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "All fields are required"
-      });
+      return res.status(400).json({ message: "All fields required" });
     }
 
     const emailLower = email.toLowerCase();
 
-    // 1️⃣ Check if user already exists
     const existingUser = await User.findOne({ email: emailLower });
     if (existingUser) {
-      return res.status(400).json({
-        message: "User already exists"
-      });
+      return res.status(400).json({ message: "User already exists" });
     }
 
-    // 2️⃣ Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 3️⃣ Remove old OTPs
     await Otp.deleteMany({ email: emailLower });
 
-    // 4️⃣ Save OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+
     await Otp.create({
+      name,
       email: emailLower,
+      password,
       otp,
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 min
+      expiresAt: Date.now() + 5 * 60 * 1000
     });
 
-    // 5️⃣ Send Email
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
+    console.log("OTP:", otp);
 
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to: emailLower,
-      subject: "Your OTP Code",
-      html: `<h2>Your OTP is: ${otp}</h2>`
-    });
-
-    res.json({
-      message: "OTP sent to email"
-    });
+    res.json({ message: "OTP sent" });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      message: "Server error"
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ================= VERIFY OTP ================= */
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const emailLower = email.toLowerCase();
+
+    const record = await Otp.findOne({ email: emailLower, otp });
+    if (!record) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (record.expiresAt < Date.now()) {
+      await Otp.deleteMany({ email: emailLower });
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    const hashedPassword = await bcrypt.hash(record.password, 10);
+
+    await User.create({
+      name: record.name,
+      email: emailLower,
+      password: hashedPassword,
+      verified: true
     });
+
+    await Otp.deleteMany({ email: emailLower });
+
+    res.status(201).json({ message: "Account verified successfully" });
+
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
