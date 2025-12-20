@@ -19,7 +19,7 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // Purane OTP delete
+    // delete old OTPs
     await Otp.deleteMany({ email: emailLower });
 
     const otpCode = Math.floor(100000 + Math.random() * 900000);
@@ -31,14 +31,14 @@ export const register = async (req, res) => {
       expiresAt
     });
 
-    // Temporary: OTP logs me
+    // TEMP: OTP in logs
     console.log(`OTP for ${emailLower}: ${otpCode}`);
 
-    res.status(200).json({ message: "OTP sent" });
+    return res.status(200).json({ message: "OTP sent" });
 
   } catch (err) {
     console.error("REGISTER ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -84,7 +84,9 @@ export const verifyOtp = async (req, res) => {
 
     await Otp.deleteMany({ email: emailLower });
 
-    res.status(201).json({ message: "Account verified successfully" });
+    return res.status(201).json({
+      message: "Account verified successfully"
+    });
 
   } catch (err) {
     console.error("VERIFY OTP ERROR:", err);
@@ -93,7 +95,7 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -109,8 +111,10 @@ export const login = async (req, res) => {
     const emailLower = email.toLowerCase();
 
     const user = await User.findOne({ email: emailLower });
-    console.log("LOGIN EMAIL:",emailLower);
-    console.log("USER FROM DB:,user);
+
+    console.log("LOGIN EMAIL:", emailLower);
+    console.log("USER FROM DB:", user);
+
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
@@ -130,7 +134,7 @@ export const login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({
+    return res.json({
       message: "Login successful",
       token,
       user: {
@@ -142,6 +146,6 @@ export const login = async (req, res) => {
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
