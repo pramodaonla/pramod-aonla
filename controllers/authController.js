@@ -12,7 +12,7 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const emailLower = email.toLowerCase();
+    const emailLower = email.toLowerCase().trim();
 
     const existingUser = await User.findOne({ email: emailLower });
     if (existingUser) {
