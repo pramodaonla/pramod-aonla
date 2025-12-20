@@ -2,6 +2,7 @@ import Otp from "../models/Otp.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { sendEmail } from "../utils/sendEmail.js";
 
 /* ================= REGISTER: GENERATE OTP ================= */
 export const register = async (req, res) => {
@@ -22,7 +23,7 @@ export const register = async (req, res) => {
     await Otp.deleteMany({ email: emailLower });
 
     const otpCode = Math.floor(100000 + Math.random() * 900000);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 🔥 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
     await Otp.create({
       email: emailLower,
@@ -30,7 +31,16 @@ export const register = async (req, res) => {
       expiresAt
     });
 
-    console.log(`REGISTER OTP for ${emailLower}: ${otpCode}`);
+    await sendEmail(
+      emailLower,
+      "Verify your account - OTP",
+      `
+        <h2>Account Verification</h2>
+        <p>Your OTP is:</p>
+        <h3>${otpCode}</h3>
+        <p>Valid for 10 minutes</p>
+      `
+    );
 
     return res.status(200).json({ message: "OTP sent" });
 
@@ -159,7 +169,7 @@ export const forgotPassword = async (req, res) => {
     await Otp.deleteMany({ email: emailLower });
 
     const otpCode = Math.floor(100000 + Math.random() * 900000);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 🔥 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await Otp.create({
       email: emailLower,
@@ -167,11 +177,18 @@ export const forgotPassword = async (req, res) => {
       expiresAt
     });
 
-    console.log(`FORGOT PASSWORD OTP for ${emailLower}: ${otpCode}`);
+    await sendEmail(
+      emailLower,
+      "Reset Password OTP",
+      `
+        <h2>Password Reset</h2>
+        <p>Your OTP is:</p>
+        <h3>${otpCode}</h3>
+        <p>Valid for 10 minutes</p>
+      `
+    );
 
-    return res.json({
-      message: "OTP sent for password reset"
-    });
+    return res.json({ message: "OTP sent for password reset" });
 
   } catch (err) {
     console.error("FORGOT PASSWORD ERROR:", err);
@@ -213,9 +230,7 @@ export const resetPassword = async (req, res) => {
 
     await Otp.deleteMany({ email: emailLower });
 
-    return res.json({
-      message: "Password reset successful"
-    });
+    return res.json({ message: "Password reset successful" });
 
   } catch (err) {
     console.error("RESET PASSWORD ERROR:", err);
