@@ -1,20 +1,21 @@
-import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
+
+// SendGrid API key set
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export const sendEmail = async (to, subject, html) => {
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: true,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+  try {
+    await sgMail.send({
+      to: to,
+      from: process.env.MAIL_FROM, // must be verified in SendGrid
+      subject: subject,
+      html: html,
+    });
 
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to,
-    subject,
-    html,
-  });
+    console.log("EMAIL SENT TO:", to);
+
+  } catch (error) {
+    console.error("SENDGRID ERROR:", error.response?.body || error.message);
+    throw error;
+  }
 };
