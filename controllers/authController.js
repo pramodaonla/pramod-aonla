@@ -4,45 +4,45 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/sendEmail.js";
 
-/* ================= REGISTER: GENERATE OTP ================= */
+/* ================= SAFE EMAIL SENDER ================= */
+const safeSendEmail = async (to, subject, html) => {
+  try {
+    await sendEmail(to, subject, html);
+    console.log("EMAIL SENT TO:", to);
+  } catch (err) {
+    console.error("EMAIL FAILED (IGNORED):", err.message);
+  }
+};
+
+/* ================= REGISTER ================= */
 export const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
+    if (!name || !email || !password)
       return res.status(400).json({ message: "All fields are required" });
-    }
 
     const emailLower = email.toLowerCase().trim();
 
-    const existingUser = await User.findOne({ email: emailLower });
-    if (existingUser) {
+    if (await User.findOne({ email: emailLower }))
       return res.status(400).json({ message: "User already exists" });
-    }
 
     await Otp.deleteMany({ email: emailLower });
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await Otp.create({
-      email: emailLower,
-      otp: String(otpCode),
-      expiresAt
-    });
+    await Otp.create({ email: emailLower, otp, expiresAt });
 
-    await sendEmail(
+    console.log("REGISTER OTP:", emailLower, otp);
+
+    // 🔥 NON-BLOCKING EMAIL
+    safeSendEmail(
       emailLower,
-      "Verify your account - OTP",
-      `
-        <h2>Account Verification</h2>
-        <p>Your OTP is:</p>
-        <h3>${otpCode}</h3>
-        <p>Valid for 10 minutes</p>
-      `
+      "Verify your account",
+      `<h3>Your OTP: ${otp}</h3><p>Valid for 10 minutes</p>`
     );
 
-    return res.status(200).json({ message: "OTP sent" });
+    return res.json({ message: "OTP sent" });
 
   } catch (err) {
     console.error("REGISTER ERROR:", err);
@@ -54,47 +54,31 @@ export const register = async (req, res) => {
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, otp } = req.body;
-
-    if (!name || !email || !password || !otp) {
+    if (!name || !email || !password || !otp)
       return res.status(400).json({ message: "All fields are required" });
-    }
 
     const emailLower = email.toLowerCase().trim();
 
-    const record = await Otp.findOne({
-      email: emailLower,
-      otp: String(otp)
-    });
+    const record = await Otp.findOne({ email: emailLower, otp: String(otp) });
+    if (!record) return res.status(400).json({ message: "Invalid OTP" });
 
-    if (!record) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    if (record.expiresAt.getTime() < Date.now()) {
+    if (record.expiresAt < Date.now()) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    const alreadyUser = await User.findOne({ email: emailLower });
-    if (alreadyUser) {
-      await Otp.deleteMany({ email: emailLower });
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
 
     await User.create({
       name,
       email: emailLower,
-      password: hashedPassword,
+      password: hashed,
       verified: true
     });
 
     await Otp.deleteMany({ email: emailLower });
 
-    return res.status(201).json({
-      message: "Account verified successfully"
-    });
+    return res.status(201).json({ message: "Account verified successfully" });
 
   } catch (err) {
     console.error("VERIFY OTP ERROR:", err);
@@ -106,43 +90,23 @@ export const verifyOtp = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password required" });
-    }
+    if (!email || !password)
+      return res.status(400).json({ message: "Email & password required" });
 
     const emailLower = email.toLowerCase().trim();
-
     const user = await User.findOne({ email: emailLower });
 
-    if (!user) {
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+    if (!user.verified) return res.status(403).json({ message: "Account not verified" });
+
+    if (!(await bcrypt.compare(password, user.password)))
       return res.status(400).json({ message: "Invalid credentials" });
-    }
 
-    if (user.verified !== true) {
-      return res.status(403).json({ message: "Account not verified" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    return res.json({
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email
-      }
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d"
     });
+
+    return res.json({ message: "Login successful", token, user });
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
@@ -154,38 +118,25 @@ export const login = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email required" });
-    }
+    if (!email) return res.status(400).json({ message: "Email required" });
 
     const emailLower = email.toLowerCase().trim();
-
     const user = await User.findOne({ email: emailLower });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     await Otp.deleteMany({ email: emailLower });
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000);
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await Otp.create({
-      email: emailLower,
-      otp: String(otpCode),
-      expiresAt
-    });
+    await Otp.create({ email: emailLower, otp, expiresAt });
 
-    await sendEmail(
+    console.log("FORGOT OTP:", emailLower, otp);
+
+    safeSendEmail(
       emailLower,
       "Reset Password OTP",
-      `
-        <h2>Password Reset</h2>
-        <p>Your OTP is:</p>
-        <h3>${otpCode}</h3>
-        <p>Valid for 10 minutes</p>
-      `
+      `<h3>Your OTP: ${otp}</h3><p>Valid for 10 minutes</p>`
     );
 
     return res.json({ message: "OTP sent for password reset" });
@@ -200,32 +151,23 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
-
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    if (!email || !otp || !newPassword)
+      return res.status(400).json({ message: "All fields required" });
 
     const emailLower = email.toLowerCase().trim();
+    const record = await Otp.findOne({ email: emailLower, otp: String(otp) });
 
-    const record = await Otp.findOne({
-      email: emailLower,
-      otp: String(otp)
-    });
-
-    if (!record) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    if (record.expiresAt.getTime() < Date.now()) {
+    if (!record) return res.status(400).json({ message: "Invalid OTP" });
+    if (record.expiresAt < Date.now()) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashed = await bcrypt.hash(newPassword, 10);
 
     await User.updateOne(
       { email: emailLower },
-      { $set: { password: hashedPassword } }
+      { $set: { password: hashed } }
     );
 
     await Otp.deleteMany({ email: emailLower });
