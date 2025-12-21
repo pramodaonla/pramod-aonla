@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/sendEmail.js";
 
-/* ================= SAFE EMAIL SENDER ================= */
+/* ================= SAFE EMAIL (NON-BLOCKING) ================= */
 const safeSendEmail = async (to, subject, html) => {
   try {
     await sendEmail(to, subject, html);
@@ -18,14 +18,19 @@ const safeSendEmail = async (to, subject, html) => {
 export const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password)
+
+    if (!name || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
+    }
 
     const emailLower = email.toLowerCase().trim();
 
-    if (await User.findOne({ email: emailLower }))
+    const existingUser = await User.findOne({ email: emailLower });
+    if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
+    }
 
+    // delete old OTPs
     await Otp.deleteMany({ email: emailLower });
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
@@ -35,7 +40,6 @@ export const register = async (req, res) => {
 
     console.log("REGISTER OTP:", emailLower, otp);
 
-    // Non-blocking email
     safeSendEmail(
       emailLower,
       "Verify your account",
@@ -43,6 +47,7 @@ export const register = async (req, res) => {
     );
 
     return res.json({ message: "OTP sent" });
+
   } catch (err) {
     console.error("REGISTER ERROR:", err);
     return res.status(500).json({ message: "Server error" });
@@ -53,30 +58,49 @@ export const register = async (req, res) => {
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, otp } = req.body;
-    if (!name || !email || !password || !otp)
+
+    if (!name || !email || !password || !otp) {
       return res.status(400).json({ message: "All fields are required" });
+    }
 
     const emailLower = email.toLowerCase().trim();
-    const record = await Otp.findOne({ email: emailLower, otp: String(otp) });
 
-    if (!record) return res.status(400).json({ message: "Invalid OTP" });
-    if (record.expiresAt < Date.now()) {
+    // already verified user
+    const alreadyUser = await User.findOne({ email: emailLower });
+    if (alreadyUser) {
+      await Otp.deleteMany({ email: emailLower });
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const record = await Otp.findOne({
+      email: emailLower,
+      otp: String(otp)
+    });
+
+    if (!record) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (record.expiresAt.getTime() < Date.now()) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     await User.create({
       name,
       email: emailLower,
-      password: hashed,
+      password: hashedPassword,
       verified: true
     });
 
     await Otp.deleteMany({ email: emailLower });
 
-    return res.status(201).json({ message: "Account verified successfully" });
+    return res.status(201).json({
+      message: "Account verified successfully"
+    });
+
   } catch (err) {
     console.error("VERIFY OTP ERROR:", err);
     return res.status(500).json({ message: "Server error" });
@@ -87,21 +111,43 @@ export const verifyOtp = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
+
+    if (!email || !password) {
       return res.status(400).json({ message: "Email & password required" });
+    }
 
     const emailLower = email.toLowerCase().trim();
     const user = await User.findOne({ email: emailLower });
 
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
-    if (!user.verified) return res.status(403).json({ message: "Account not verified" });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    if (user.verified !== true) {
+      return res.status(403).json({ message: "Account not verified" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
-    return res.json({ message: "Login successful", token, user });
+    return res.json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+      }
+    });
+
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     return res.status(500).json({ message: "Server error" });
@@ -112,16 +158,22 @@ export const login = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: "Email required" });
+
+    if (!email) {
+      return res.status(400).json({ message: "Email required" });
+    }
 
     const emailLower = email.toLowerCase().trim();
     const user = await User.findOne({ email: emailLower });
-    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     await Otp.deleteMany({ email: emailLower });
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await Otp.create({ email: emailLower, otp, expiresAt });
 
@@ -134,6 +186,7 @@ export const forgotPassword = async (req, res) => {
     );
 
     return res.json({ message: "OTP sent for password reset" });
+
   } catch (err) {
     console.error("FORGOT PASSWORD ERROR:", err);
     return res.status(500).json({ message: "Server error" });
@@ -144,24 +197,38 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
-    if (!email || !otp || !newPassword)
+
+    if (!email || !otp || !newPassword) {
       return res.status(400).json({ message: "All fields required" });
+    }
 
     const emailLower = email.toLowerCase().trim();
-    const record = await Otp.findOne({ email: emailLower, otp: String(otp) });
 
-    if (!record) return res.status(400).json({ message: "Invalid OTP" });
-    if (record.expiresAt < Date.now()) {
+    const record = await Otp.findOne({
+      email: emailLower,
+      otp: String(otp)
+    });
+
+    if (!record) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    if (record.expiresAt.getTime() < Date.now()) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    const hashed = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await User.updateOne({ email: emailLower }, { $set: { password: hashed } });
+    await User.updateOne(
+      { email: emailLower },
+      { $set: { password: hashedPassword } }
+    );
+
     await Otp.deleteMany({ email: emailLower });
 
     return res.json({ message: "Password reset successful" });
+
   } catch (err) {
     console.error("RESET PASSWORD ERROR:", err);
     return res.status(500).json({ message: "Server error" });
