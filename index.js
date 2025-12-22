@@ -9,7 +9,7 @@ const app = express();
 /* ================= RATE LIMIT ================= */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per IP
+  max: 100, // max 100 requests per IP
   message: {
     message: "Too many requests, please try again later"
   }
@@ -20,7 +20,7 @@ app.use(cors());
 app.use(express.json());
 app.use(apiLimiter);
 
-/* ================= DB ================= */
+/* ================= DB CONNECT ================= */
 mongoose
   .connect(process.env.MONGO_URI, { dbName: "pramodaonla" })
   .then(() => console.log("MongoDB connected"))
@@ -28,7 +28,7 @@ mongoose
 
 /* ================= ROUTES ================= */
 app.use("/api/auth", require("./routes/auth"));
-app.use("/api/posts", require("./routes/posts"));
+app.use("/api/posts", require("./routes/posts")); // agar post routes hain
 
 /* ================= TEST ROUTE ================= */
 app.get("/", (req, res) => {
