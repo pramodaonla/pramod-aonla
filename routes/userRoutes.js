@@ -1,9 +1,9 @@
-import express from "express";
-import authMiddleware from "../middleware/authMiddleware.js";
+const express = require("express");
+const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// 🔒 Protected route
+/* ================= PROTECTED PROFILE ================= */
 router.get("/profile", authMiddleware, (req, res) => {
   res.json({
     message: "Profile fetched successfully",
@@ -11,4 +11,4 @@ router.get("/profile", authMiddleware, (req, res) => {
   });
 });
 
-export default router;
+module.exports = router;
