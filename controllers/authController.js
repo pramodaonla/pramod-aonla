@@ -5,12 +5,12 @@ import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/sendEmail.js";
 
 /* ================= EMAIL TEMPLATE ================= */
-const otpEmailTemplate = ({ title, otp, reason }) => {
+const otpEmailTemplate = ({ otp, reason }) => {
   return `
     <div style="font-family: Arial, sans-serif; background:#f6f6f6; padding:30px">
       <div style="max-width:500px; margin:auto; background:#ffffff; padding:30px; border-radius:8px">
-        <h1 style="text-align:center; color:#000; margin-bottom:10px;">
-          Welcome to <span style="color:#007bff;">BiggEyes</span>
+        <h1 style="text-align:center; color:#e91e63; margin-bottom:10px;">
+          Welcome to BiggEyes
         </h1>
 
         <p style="font-size:14px; color:#555; text-align:center;">
@@ -23,7 +23,7 @@ const otpEmailTemplate = ({ title, otp, reason }) => {
             letter-spacing:6px;
             font-weight:bold;
             color:#000;
-            background:#f1f1f1;
+            background:#ffe6f0;
             padding:15px;
             border-radius:6px;
           ">
