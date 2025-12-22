@@ -10,7 +10,7 @@ const otpEmailTemplate = ({ title, otp, reason }) => {
     <div style="font-family: Arial, sans-serif; background:#f6f6f6; padding:30px">
       <div style="max-width:500px; margin:auto; background:#ffffff; padding:30px; border-radius:8px">
         <h1 style="text-align:center; color:#000; margin-bottom:10px;">
-          WELCOME TO <span style="color:#007bff;">BIGGEYES</span>
+          Welcome to <span style="color:#007bff;">BiggEyes</span>
         </h1>
 
         <p style="font-size:14px; color:#555; text-align:center;">
