@@ -4,11 +4,49 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/sendEmail.js";
 
+/* ================= EMAIL TEMPLATE ================= */
+const otpEmailTemplate = ({ title, otp, reason }) => {
+  return `
+    <div style="font-family: Arial, sans-serif; background:#f6f6f6; padding:30px">
+      <div style="max-width:500px; margin:auto; background:#ffffff; padding:30px; border-radius:8px">
+        <h1 style="text-align:center; color:#000; margin-bottom:10px;">
+          WELCOME TO <span style="color:#007bff;">BIGGEYES</span>
+        </h1>
+
+        <p style="font-size:14px; color:#555; text-align:center;">
+          ${reason}
+        </p>
+
+        <div style="margin:30px 0; text-align:center;">
+          <div style="
+            font-size:32px;
+            letter-spacing:6px;
+            font-weight:bold;
+            color:#000;
+            background:#f1f1f1;
+            padding:15px;
+            border-radius:6px;
+          ">
+            ${otp}
+          </div>
+        </div>
+
+        <p style="font-size:13px; color:#777; text-align:center;">
+          This OTP is valid for <b>10 minutes</b> only.
+        </p>
+
+        <p style="font-size:12px; color:#999; text-align:center; margin-top:20px;">
+          If you did not request this, please ignore this email.
+        </p>
+      </div>
+    </div>
+  `;
+};
+
 /* ================= SAFE EMAIL (NON-BLOCKING) ================= */
 const safeSendEmail = async (to, subject, html) => {
   try {
     await sendEmail(to, subject, html);
-    console.log("EMAIL SENT TO:", to);
   } catch (err) {
     console.error("EMAIL FAILED (IGNORED):", err.message);
   }
@@ -18,32 +56,28 @@ const safeSendEmail = async (to, subject, html) => {
 export const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
+    if (!name || !email || !password)
       return res.status(400).json({ message: "All fields are required" });
-    }
 
     const emailLower = email.toLowerCase().trim();
 
-    const existingUser = await User.findOne({ email: emailLower });
-    if (existingUser) {
+    if (await User.findOne({ email: emailLower }))
       return res.status(400).json({ message: "User already exists" });
-    }
 
-    // delete old OTPs
     await Otp.deleteMany({ email: emailLower });
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await Otp.create({ email: emailLower, otp, expiresAt });
 
-    console.log("REGISTER OTP:", emailLower, otp);
-
     safeSendEmail(
       emailLower,
-      "Verify your account",
-      `<h3>Your OTP: ${otp}</h3><p>Valid for 10 minutes</p>`
+      "Verify your BiggEyes account",
+      otpEmailTemplate({
+        otp,
+        reason: "Use the OTP below to complete your account registration."
+      })
     );
 
     return res.json({ message: "OTP sent" });
@@ -58,30 +92,20 @@ export const register = async (req, res) => {
 export const verifyOtp = async (req, res) => {
   try {
     const { name, email, password, otp } = req.body;
-
-    if (!name || !email || !password || !otp) {
+    if (!name || !email || !password || !otp)
       return res.status(400).json({ message: "All fields are required" });
-    }
 
     const emailLower = email.toLowerCase().trim();
 
-    // already verified user
-    const alreadyUser = await User.findOne({ email: emailLower });
-    if (alreadyUser) {
+    if (await User.findOne({ email: emailLower })) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const record = await Otp.findOne({
-      email: emailLower,
-      otp: String(otp)
-    });
+    const record = await Otp.findOne({ email: emailLower, otp: String(otp) });
+    if (!record) return res.status(400).json({ message: "Invalid OTP" });
 
-    if (!record) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    if (record.expiresAt.getTime() < Date.now()) {
+    if (record.expiresAt < Date.now()) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "OTP expired" });
     }
@@ -97,9 +121,7 @@ export const verifyOtp = async (req, res) => {
 
     await Otp.deleteMany({ email: emailLower });
 
-    return res.status(201).json({
-      message: "Account verified successfully"
-    });
+    return res.status(201).json({ message: "Account verified successfully" });
 
   } catch (err) {
     console.error("VERIFY OTP ERROR:", err);
@@ -111,41 +133,26 @@ export const verifyOtp = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
+    if (!email || !password)
       return res.status(400).json({ message: "Email & password required" });
-    }
 
     const emailLower = email.toLowerCase().trim();
     const user = await User.findOne({ email: emailLower });
 
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    if (user.verified !== true) {
-      return res.status(403).json({ message: "Account not verified" });
-    }
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+    if (!user.verified) return res.status(403).json({ message: "Account not verified" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d"
+    });
 
     return res.json({
       message: "Login successful",
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email
-      }
+      user: { id: user._id, name: user.name, email: user.email }
     });
 
   } catch (err) {
@@ -158,17 +165,11 @@ export const login = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email required" });
-    }
+    if (!email) return res.status(400).json({ message: "Email required" });
 
     const emailLower = email.toLowerCase().trim();
     const user = await User.findOne({ email: emailLower });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     await Otp.deleteMany({ email: emailLower });
 
@@ -177,12 +178,13 @@ export const forgotPassword = async (req, res) => {
 
     await Otp.create({ email: emailLower, otp, expiresAt });
 
-    console.log("FORGOT OTP:", emailLower, otp);
-
     safeSendEmail(
       emailLower,
-      "Reset Password OTP",
-      `<h3>Your OTP: ${otp}</h3><p>Valid for 10 minutes</p>`
+      "Reset your BiggEyes password",
+      otpEmailTemplate({
+        otp,
+        reason: "Use the OTP below to reset your password."
+      })
     );
 
     return res.json({ message: "OTP sent for password reset" });
@@ -197,23 +199,14 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
-
-    if (!email || !otp || !newPassword) {
+    if (!email || !otp || !newPassword)
       return res.status(400).json({ message: "All fields required" });
-    }
 
     const emailLower = email.toLowerCase().trim();
+    const record = await Otp.findOne({ email: emailLower, otp: String(otp) });
 
-    const record = await Otp.findOne({
-      email: emailLower,
-      otp: String(otp)
-    });
-
-    if (!record) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-
-    if (record.expiresAt.getTime() < Date.now()) {
+    if (!record) return res.status(400).json({ message: "Invalid OTP" });
+    if (record.expiresAt < Date.now()) {
       await Otp.deleteMany({ email: emailLower });
       return res.status(400).json({ message: "OTP expired" });
     }
