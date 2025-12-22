@@ -9,7 +9,7 @@ const app = express();
 /* ================= RATE LIMIT ================= */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // max 100 requests per IP
+  max: 100,
   message: {
     message: "Too many requests, please try again later"
   }
@@ -28,7 +28,8 @@ mongoose
 
 /* ================= ROUTES ================= */
 app.use("/api/auth", require("./routes/auth"));
-app.use("/api/posts", require("./routes/posts")); // agar post routes hain
+app.use("/api/posts", require("./routes/posts")); // agar use hota hai
+app.use("/api/user", require("./routes/user"));   // ✅ NEW (PROTECTED)
 
 /* ================= TEST ROUTE ================= */
 app.get("/", (req, res) => {
