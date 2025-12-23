@@ -22,16 +22,14 @@ app.use(apiLimiter);
 
 /* ================= DB CONNECT ================= */
 mongoose
-  .connect(process.env.MONGO_URI, {
-    dbName: "pramodaonla"
-  })
+  .connect(process.env.MONGO_URI, { dbName: "pramodaonla" })
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("Mongo Error:", err));
 
 /* ================= ROUTES ================= */
-/* ⚠️ file names MUST match routes folder */
 app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/posts", require("./routes/posts"));
+app.use("/api/posts", require("./routes/posts")); // agar use hota hai
+app.use("/api/user", require("./routes/userRoutes"));   // ✅ NEW (PROTECTED)
 
 /* ================= TEST ROUTE ================= */
 app.get("/", (req, res) => {
