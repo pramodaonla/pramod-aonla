@@ -8,11 +8,10 @@ const app = express();
 
 /* ================= RATE LIMIT ================= */
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
-  message: {
-    message: "Too many requests, please try again later"
-  }
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
 /* ================= MIDDLEWARE ================= */
@@ -26,14 +25,14 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("Mongo Error:", err));
 
-/* ================= ROUTES ================= */
+/* ================= ROUTES (MATCH FILE NAMES) ================= */
 app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/posts", require("./routes/posts")); // agar use hota hai
-app.use("/api/user", require("./routes/userRoutes"));   // ✅ NEW (PROTECTED)
+app.use("/api/posts", require("./routes/posts"));
+app.use("/api/user", require("./routes/userRoutes"));
 
 /* ================= TEST ROUTE ================= */
 app.get("/", (req, res) => {
-  res.send("Backend Running");
+  res.status(200).send("Backend Running");
 });
 
 /* ================= SERVER ================= */
