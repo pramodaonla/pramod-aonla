@@ -10,8 +10,7 @@ const app = express();
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  standardHeaders: true,
-  legacyHeaders: false
+  message: { message: "Too many requests, please try again later" }
 });
 
 /* ================= MIDDLEWARE ================= */
@@ -19,20 +18,20 @@ app.use(cors());
 app.use(express.json());
 app.use(apiLimiter);
 
-/* ================= DB CONNECT ================= */
+/* ================= DB ================= */
 mongoose
   .connect(process.env.MONGO_URI, { dbName: "pramodaonla" })
   .then(() => console.log("MongoDB connected"))
   .catch(err => console.error("Mongo Error:", err));
 
-/* ================= ROUTES (MATCH FILE NAMES) ================= */
+/* ================= ROUTES ================= */
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/posts", require("./routes/posts"));
 app.use("/api/user", require("./routes/userRoutes"));
 
-/* ================= TEST ROUTE ================= */
+/* ================= TEST ================= */
 app.get("/", (req, res) => {
-  res.status(200).send("Backend Running");
+  res.send("Backend Running");
 });
 
 /* ================= SERVER ================= */
