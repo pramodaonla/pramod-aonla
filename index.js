@@ -27,9 +27,8 @@ mongoose
   .catch(err => console.error("Mongo Error:", err));
 
 /* ================= ROUTES ================= */
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/posts", require("./routes/posts")); // agar use hota hai
-app.use("/api/user", require("./routes/userRoutes"));   // ✅ NEW (PROTECTED)
+app.use("/api/auth", require("./routes/auth.js"));   // ✅ FIXED
+app.use("/api/posts", require("./routes/posts.js")); // ✅ FIXED
 
 /* ================= TEST ROUTE ================= */
 app.get("/", (req, res) => {
