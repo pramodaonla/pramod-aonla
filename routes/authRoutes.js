@@ -11,14 +11,14 @@ const authMiddleware = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-/* ===== PUBLIC ROUTES ===== */
+/* PUBLIC */
 router.post("/register", register);
 router.post("/verify-otp", verifyOtp);
 router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
-/* ===== PROTECTED ===== */
+/* PROTECTED */
 router.get("/me", authMiddleware, (req, res) => {
   res.json({
     message: "Authenticated user",
