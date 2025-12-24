@@ -1,40 +1,21 @@
-require("dotenv").config();
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const rateLimit = require("express-rate-limit");
+import express from "express";
+import dotenv from "dotenv";
 
-const authRoutes = require("./routes/authRoutes");
-const postRoutes = require("./routes/postRoutes");
-const userRoutes = require("./routes/userRoutes");
+import postRoutes from "./routes/postRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+
+dotenv.config();
 
 const app = express();
-
-/* RATE LIMIT */
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { message: "Too many requests, please try again later" }
-});
-
-/* MIDDLEWARE */
-app.use(cors());
 app.use(express.json());
-app.use(apiLimiter);
 
-/* DB CONNECT */
-mongoose
-  .connect(process.env.MONGO_URI, { dbName: "pramodaonla" })
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error("Mongo Error:", err));
-
-/* ROUTES */
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
-app.use("/api/user", userRoutes);
 
-/* TEST ROUTE */
-app.get("/", (req, res) => res.send("Backend Running"));
+const PORT = process.env.PORT || 3000;
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
