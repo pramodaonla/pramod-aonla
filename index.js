@@ -1,49 +1,40 @@
-import dotenv from "dotenv";
-dotenv.config();
+require("dotenv").config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import rateLimit from "express-rate-limit";
-
-import authRoutes from "./routes/authRoutes.js";
-import postsRoutes from "./routes/postsRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
+const authRoutes = require("./routes/authRoutes");
+const postRoutes = require("./routes/postRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 const app = express();
 
-/* ================= SECURITY ================= */
+/* RATE LIMIT */
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: "Too many requests, please try again later" }
+});
+
+/* MIDDLEWARE */
 app.use(cors());
 app.use(express.json());
+app.use(apiLimiter);
 
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100
-  })
-);
-
-/* ================= DB ================= */
+/* DB CONNECT */
 mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => {
-    console.error("❌ Mongo error", err);
-    process.exit(1);
-  });
+  .connect(process.env.MONGO_URI, { dbName: "pramodaonla" })
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error("Mongo Error:", err));
 
-/* ================= ROUTES ================= */
+/* ROUTES */
 app.use("/api/auth", authRoutes);
-app.use("/api/posts", postsRoutes);
+app.use("/api/posts", postRoutes);
 app.use("/api/user", userRoutes);
 
-/* ================= TEST ================= */
-app.get("/", (req, res) => {
-  res.send("Backend Running");
-});
+/* TEST ROUTE */
+app.get("/", (req, res) => res.send("Backend Running"));
 
-/* ================= SERVER ================= */
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log("Server running on port", PORT));
