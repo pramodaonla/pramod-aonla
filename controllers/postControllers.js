@@ -1,14 +1,13 @@
 export const createPost = (req, res) => {
   res.json({
-    success: true,
-    message: "Post created",
+    message: "Post created successfully",
     user: req.user || null
   });
 };
 
 export const getMyPosts = (req, res) => {
   res.json({
-    success: true,
+    message: "My posts fetched",
     posts: []
   });
 };
