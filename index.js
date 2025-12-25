@@ -11,17 +11,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* root test */
+/* ✅ TEST ROUTE */
 app.get("/", (req, res) => {
-  res.send("API running successfully 🚀");
+  res.send("Backend is running ✅");
 });
 
-/* routes */
+/* ✅ USER ROUTES */
 app.use("/api/users", userRoutes);
 
-/* PORT (Render compatible) */
+/* ✅ PORT (Render + Local) */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
