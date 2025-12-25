@@ -1,11 +1,13 @@
-import nodemailer from "nodemailer";
+import mongoose from "mongoose";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("✅ MongoDB connected");
+  } catch (error) {
+    console.error("❌ MongoDB error:", error.message);
+    process.exit(1);
   }
-});
+};
 
-export default transporter;
+export default connectDB;
