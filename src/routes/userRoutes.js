@@ -1,13 +1,10 @@
 import express from "express";
-import { registerUser, loginUser, getProfile } from "../../controllers/userController.js";
+import { getProfile } from "../../controllers/userController.js";
 import { protect } from "../../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
+/* PROFILE */
 router.get("/profile", protect, getProfile);
-
-router.get("/test", (req, res) => res.json({ message: "User routes working ✅" }));
 
 export default router;
