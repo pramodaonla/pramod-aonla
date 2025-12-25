@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 
-/* ROUTES */
+import connectDB from "./config/db.js";
 import authRoutes from "./src/routes/authRoutes.js";
 import userRoutes from "./src/routes/userRoutes.js";
 
@@ -14,12 +14,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ROOT CHECK */
+/* DATABASE */
+connectDB();
+
+/* ROOT */
 app.get("/", (req, res) => {
   res.send("Backend running ✅");
 });
 
-/* API ROUTES */
+/* ROUTES */
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
