@@ -1,13 +1,13 @@
-export const createPost = (req, res) => {
+export const createPost = async (req, res) => {
   res.json({
-    message: "Post created",
+    message: "Post created successfully",
     user: req.user
   });
 };
 
-export const getMyPosts = (req, res) => {
+export const getMyPosts = async (req, res) => {
   res.json({
     message: "My posts fetched",
-    user: req.user
+    posts: []
   });
 };
