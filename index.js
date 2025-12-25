@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 
-import connectDB from "./src/config/db.js";
+import connectDB from "./config/db.js";
 import authRoutes from "./src/routes/authRoutes.js";
 import userRoutes from "./src/routes/userRoutes.js";
 
@@ -10,24 +10,24 @@ dotenv.config();
 
 const app = express();
 
-/* MIDDLEWARE */
+/* Middleware */
 app.use(cors());
 app.use(express.json());
 
-/* DB CONNECT FIRST */
-await connectDB();
+/* Database */
+connectDB();
 
-/* ROOT */
+/* Root */
 app.get("/", (req, res) => {
   res.send("Backend running ✅");
 });
 
-/* ROUTES */
+/* Routes */
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 
+/* Server */
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
