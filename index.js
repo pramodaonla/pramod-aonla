@@ -8,21 +8,20 @@ dotenv.config();
 
 const app = express();
 
-// middleware
 app.use(cors());
 app.use(express.json());
 
-// test route
+/* root test */
 app.get("/", (req, res) => {
-  res.send("Server running ✅");
+  res.send("API running successfully 🚀");
 });
 
-// routes
+/* routes */
 app.use("/api/users", userRoutes);
 
-// PORT (Render + local dono ke liye)
+/* PORT (Render compatible) */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
