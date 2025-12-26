@@ -11,50 +11,34 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password)
       return res.status(400).json({ message: "All fields required" });
-    }
 
-    let user = await User.findOne({ email });
+    const user = await User.findOne({ email });
 
-    // ✅ Case 1: User already verified
+    /* ---------- CASE 1: VERIFIED USER ---------- */
     if (user && user.isVerified) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // ✅ Case 2: User exists but NOT verified
+    /* ---------- CASE 2: UNVERIFIED USER ---------- */
     if (user && !user.isVerified) {
       const oldOtp = await Otp.findOne({ email });
 
-      // OTP expired → resend OTP
-      if (!oldOtp || oldOtp.expiresAt < new Date()) {
-        await Otp.deleteMany({ email });
-
-        const otp = generateOtp();
-        const expiresAt = new Date(Date.now() + 11 * 60 * 1000);
-
-        await Otp.create({ email, otp, expiresAt });
-
-        await sendEmail(
-          email,
-          "Verify your BiggEyes account",
-          otpEmailTemplate({ otp, purpose: "register" })
-        );
-
-        return res.json({
-          message: "OTP expired. New OTP sent ✅",
+      // OTP still valid → block
+      if (oldOtp && oldOtp.expiresAt > new Date()) {
+        return res.status(400).json({
+          message: "OTP already sent. Please verify your email",
         });
       }
 
-      // OTP still valid
-      return res.status(400).json({
-        message: "OTP already sent. Please verify your email",
-      });
+      // OTP expired → cleanup
+      await User.deleteOne({ email });
+      await Otp.deleteMany({ email });
     }
 
-    // ✅ Case 3: New user
+    /* ---------- CREATE USER ---------- */
     const hashedPassword = await bcrypt.hash(password, 10);
-
     await User.create({
       name,
       email,
@@ -62,6 +46,7 @@ export const registerUser = async (req, res) => {
       isVerified: false,
     });
 
+    /* ---------- CREATE OTP ---------- */
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + 11 * 60 * 1000);
 
@@ -70,14 +55,18 @@ export const registerUser = async (req, res) => {
     await sendEmail(
       email,
       "Verify your BiggEyes account",
-      otpEmailTemplate({ otp, purpose: "register" })
+      otpEmailTemplate({
+        otp,
+        purpose: "register",
+        minutes: 11,
+      })
     );
 
     res.status(201).json({
-      message: "OTP sent to your email for verification ✅",
+      message: "OTP sent to email. Please verify ✅",
     });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("REGISTER ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -88,13 +77,11 @@ export const verifyOtp = async (req, res) => {
     const { email, otp } = req.body;
 
     const record = await Otp.findOne({ email, otp });
-    if (!record) {
+    if (!record)
       return res.status(400).json({ message: "Invalid OTP" });
-    }
 
-    if (record.expiresAt < new Date()) {
+    if (record.expiresAt < new Date())
       return res.status(400).json({ message: "OTP expired" });
-    }
 
     await User.findOneAndUpdate(
       { email },
@@ -104,7 +91,8 @@ export const verifyOtp = async (req, res) => {
     await Otp.deleteMany({ email });
 
     res.json({ message: "Account verified successfully ✅" });
-  } catch (err) {
+  } catch (error) {
+    console.error("VERIFY OTP ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -131,11 +119,9 @@ export const loginUser = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({
-      message: "Login successful ✅",
-      token,
-    });
-  } catch (err) {
+    res.json({ message: "Login successful ✅", token });
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -145,10 +131,9 @@ export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user || !user.isVerified) {
+    const user = await User.findOne({ email, isVerified: true });
+    if (!user)
       return res.status(404).json({ message: "User not found" });
-    }
 
     await Otp.deleteMany({ email });
 
@@ -160,11 +145,16 @@ export const forgotPassword = async (req, res) => {
     await sendEmail(
       email,
       "Reset your BiggEyes password",
-      otpEmailTemplate({ otp, purpose: "forgot" })
+      otpEmailTemplate({
+        otp,
+        purpose: "forgot",
+        minutes: 11,
+      })
     );
 
     res.json({ message: "OTP sent for password reset ✅" });
-  } catch (err) {
+  } catch (error) {
+    console.error("FORGOT PASSWORD ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -191,7 +181,8 @@ export const resetPassword = async (req, res) => {
     await Otp.deleteMany({ email });
 
     res.json({ message: "Password reset successful ✅" });
-  } catch (err) {
+  } catch (error) {
+    console.error("RESET PASSWORD ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
