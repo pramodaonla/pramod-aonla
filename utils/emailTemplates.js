@@ -14,7 +14,7 @@ export const otpEmailTemplate = ({ otp, purpose }) => {
       font-weight:800;
       margin-bottom:10px;
     ">
-      Welcome to BiggEyes 💗
+      Welcome to BiggEyes
     </h1>
 
     <p style="
