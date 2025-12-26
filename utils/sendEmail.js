@@ -1,9 +1,5 @@
 import sgMail from "@sendgrid/mail";
 
-if (!process.env.SENDGRID_API_KEY || !process.env.MAIL_FROM) {
-  console.error("❌ SENDGRID_API_KEY or MAIL_FROM missing in .env");
-}
-
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export const sendEmail = async (to, subject, html) => {
@@ -12,12 +8,10 @@ export const sendEmail = async (to, subject, html) => {
       to,
       from: { email: process.env.MAIL_FROM, name: "BiggEyes" },
       subject,
-      html,
-      replyTo: process.env.MAIL_FROM,
-      trackingSettings: { clickTracking: { enable: false }, openTracking: { enable: true } }
+      html
     });
-    console.log("✅ EMAIL SENT TO:", to);
-  } catch (error) {
-    console.error("❌ SENDGRID ERROR:", error?.response?.body || error.message);
+    console.log("✅ Email sent:", to);
+  } catch (err) {
+    console.error("❌ SendGrid Error:", err?.response?.body || err.message);
   }
 };
