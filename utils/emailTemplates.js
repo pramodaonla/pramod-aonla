@@ -58,7 +58,7 @@ export const otpEmailTemplate = ({ otp, purpose }) => {
         font-size:13px;
         margin-top:10px;
       ">
-        ⏰ Valid for <b>11 minutes</b>
+      Valid for <b>11 minutes</b>
       </p>
     </div>
 
