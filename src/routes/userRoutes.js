@@ -3,8 +3,6 @@ import { getProfile } from "../../controllers/userController.js";
 import { protect } from "../../middleware/authMiddleware.js";
 
 const router = express.Router();
-
-/* PROFILE */
 router.get("/profile", protect, getProfile);
 
 export default router;
