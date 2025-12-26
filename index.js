@@ -8,16 +8,14 @@ import { swaggerDocs } from "./swagger.js";
 dotenv.config();
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 connectDB();
 
-/* ROUTES */
 app.use("/api/auth", authRoutes);
 
-/* SWAGGER */
+/* Swagger */
 swaggerDocs(app);
 
 app.listen(process.env.PORT || 3000, () => {
