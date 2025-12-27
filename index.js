@@ -1,26 +1,14 @@
 import express from "express";
-import dotenv from "dotenv";
-import cors from "cors";
+import {
+  registerUser,
+  loginUser,
+  verifyOtp
+} from "../controllers/authController.js";
 
-import connectDB from "./config/db.js";
-import authRoutes from "./src/routes/authRoutes.js";
+const router = express.Router();
 
-dotenv.config();
+router.post("/register", registerUser);
+router.post("/verify-otp", verifyOtp);
+router.post("/login", loginUser);
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
-connectDB();
-
-app.use("/api/auth", authRoutes);
-
-app.get("/", (req, res) => {
-  res.send("API is running ✅");
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+export default router;
