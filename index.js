@@ -12,10 +12,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// DB
 connectDB();
 
+// Routes
 app.use("/api/auth", authRoutes);
 
+// Health
 app.get("/", (req, res) => {
   res.send("API is running ✅");
 });
